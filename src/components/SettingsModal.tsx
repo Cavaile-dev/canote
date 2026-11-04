@@ -1,0 +1,169 @@
+import React, { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { usePolicyStore } from "../stores/policyStore";
+import { Sliders, Mic, Brain, Wrench, Keyboard, FolderOpen, ShieldCheck, Users } from "./icons";
+import SidebarModal, { type SidebarItem } from "./ui/SidebarModal";
+import SettingsPage, { SettingsSectionType } from "./SettingsPage";
+import { useAuth } from "../hooks/useAuth";
+
+export type { SettingsSectionType };
+
+// The old AI Models sidebar had four items (transcription, meetings,
+// intelligence, agentMode) — they now collapse into two: speechToText + llms.
+// Legacy deep-links land on the matching sub-tab via LEGACY_SUB_TAB.
+// "dictationAgent" (the Home GPU banner) and "noteFormatting" (a note action's
+// error toast) are live deep-links, not legacy aliases.
+const SECTION_ALIASES: Record<string, SettingsSectionType> = {
+  account: "general",
+  profile: "general",
+  plansBilling: "general",
+  toneStyle: "general",
+  aiModels: "llms",
+  agentConfig: "llms",
+  agentMode: "llms",
+  dictationAgent: "llms",
+  intelligence: "llms",
+  meetings: "llms",
+  noteFormatting: "llms",
+  prompts: "llms",
+  transcription: "speechToText",
+  uploadTranscription: "speechToText",
+  softwareUpdates: "system",
+  privacy: "privacyData",
+  permissions: "privacyData",
+  developer: "system",
+};
+
+const LEGACY_SUB_TAB: Record<string, string> = {
+  transcription: "dictation",
+  uploadTranscription: "upload",
+  dictationAgent: "dictationAgent",
+  meetings: "noteFormatting",
+  noteFormatting: "noteFormatting",
+  intelligence: "dictationCleanup",
+  agentMode: "chatIntelligence",
+  agentConfig: "chatIntelligence",
+  aiModels: "dictationCleanup",
+  prompts: "dictationCleanup",
+};
+
+interface SettingsModalProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  initialSection?: string;
+}
+
+export default function SettingsModal({ open, onOpenChange, initialSection }: SettingsModalProps) {
+  const { t } = useTranslation();
+  const { isSignedIn } = useAuth();
+  const policyManaged = usePolicyStore((s) => s.managed);
+  const sidebarItems: SidebarItem<SettingsSectionType>[] = useMemo(() => {
+    const items: SidebarItem<SettingsSectionType>[] = [
+      {
+        id: "workspace" as const,
+        label: t("settingsModal.sections.workspace.label"),
+        icon: Users,
+        description: t("settingsModal.sections.workspace.description"),
+        group: t("settingsModal.groups.app"),
+      },
+      {
+        id: "general",
+        label: t("settingsModal.sections.general.label"),
+        icon: Sliders,
+        description: t("settingsModal.sections.general.description"),
+        group: t("settingsModal.groups.app"),
+      },
+      {
+        id: "hotkeys",
+        label: t("settingsModal.sections.hotkeys.label"),
+        icon: Keyboard,
+        description: t("settingsModal.sections.hotkeys.description"),
+        group: t("settingsModal.groups.app"),
+      },
+      {
+        id: "speechToText",
+        label: t("settingsModal.sections.speechToText.label"),
+        icon: Mic,
+        description: t("settingsModal.sections.speechToText.description"),
+        group: t("settingsModal.groups.aiModels"),
+      },
+      {
+        id: "llms",
+        label: t("settingsModal.sections.llms.label"),
+        icon: Brain,
+        description: t("settingsModal.sections.llms.description"),
+        group: t("settingsModal.groups.aiModels"),
+      },
+      {
+        id: "privacyData",
+        label: "Data",
+        icon: FolderOpen,
+        description: "Penyimpanan, retensi, dan pengelolaan data",
+        group: t("settingsModal.groups.system"),
+      },
+      {
+        id: "system",
+        label: t("settingsModal.sections.system.label"),
+        icon: Wrench,
+        description: t("settingsModal.sections.system.description"),
+        group: t("settingsModal.groups.system"),
+      },
+    ];
+    return isSignedIn ? items : items.filter((item) => item.id !== "workspace");
+  }, [t, isSignedIn]);
+
+  const resolveSection = (section: string | undefined): SettingsSectionType => {
+    if (!section) return "general";
+    return (SECTION_ALIASES[section] ?? section) as SettingsSectionType;
+  };
+
+  const [activeSection, setActiveSection] = React.useState<SettingsSectionType>(() =>
+    resolveSection(initialSection)
+  );
+  const [initialSubTab, setInitialSubTab] = useState<string | undefined>(() =>
+    initialSection ? LEGACY_SUB_TAB[initialSection] : undefined
+  );
+  const [prevOpen, setPrevOpen] = useState(open);
+
+  if (open && !prevOpen && initialSection) {
+    setPrevOpen(open);
+    setActiveSection(resolveSection(initialSection));
+    setInitialSubTab(LEGACY_SUB_TAB[initialSection]);
+  } else if (open !== prevOpen) {
+    setPrevOpen(open);
+    if (!open) setInitialSubTab(undefined);
+  }
+
+  const handleSectionChange = (section: SettingsSectionType, subTab?: string) => {
+    setActiveSection(resolveSection(section));
+    setInitialSubTab(subTab);
+  };
+
+  const visibleSection = resolveSection(activeSection);
+
+  return (
+    <SidebarModal<SettingsSectionType>
+      open={open}
+      onOpenChange={onOpenChange}
+      title={t("settingsModal.title")}
+      sidebarItems={sidebarItems}
+      activeSection={visibleSection}
+      onSectionChange={handleSectionChange}
+      notice={
+        policyManaged
+          ? {
+              icon: <ShieldCheck className="h-3.5 w-3.5 shrink-0" />,
+              label: t("settingsModal.managedAccount"),
+              description: t("settingsModal.managedByOrg"),
+            }
+          : undefined
+      }
+    >
+      <SettingsPage
+        activeSection={visibleSection}
+        onNavigateToSection={handleSectionChange}
+        initialSubTab={initialSubTab}
+      />
+    </SidebarModal>
+  );
+}

@@ -1,0 +1,240 @@
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const vm = require("node:vm");
+
+// The meeting dispatch/start/teardown paths live inside the IPCHandlers
+// registration closure, so — like ipcPolicyHeaderCoverage.test.js — this pins
+// the wiring at the source level.
+const source = fs.readFileSync(path.join(__dirname, "../../src/helpers/ipcHandlers.js"), "utf8");
+
+test("every meeting realtime connect labels the stream and gives system its own VAD threshold", () => {
+  assert.match(source, /const MEETING_SYSTEM_VAD_THRESHOLD = 0\.3;/);
+  assert.match(
+    source,
+    /withMeetingSourceConnectOpts = \(connectOpts, source\) => \(\{\s*\.\.\.connectOpts,\s*streamLabel: source,\s*\.\.\.\(source === "system" \? \{ vadThreshold: MEETING_SYSTEM_VAD_THRESHOLD \} : \{\}\),\s*\}\)/
+  );
+  // Initial connect and mid-meeting reconnect both go through the helper; a
+  // bare ...connectOpts spread would silently drop the system channel's
+  // threshold and its stream label.
+  assert.equal(
+    (source.match(/\.\.\.withMeetingSourceConnectOpts\(connectOpts, source\)/g) ?? []).length,
+    2
+  );
+  assert.doesNotMatch(source, /connect\(\{ apiKey: secret, token: secret, \.\.\.connectOpts \}\)/);
+});
+
+test("streaming dispatch logs system-channel levels", () => {
+  assert.match(
+    source,
+    /source === "system" && buffer\.length >= 2[\s\S]{0,400}?"Meeting system audio stats"/
+  );
+});
+
+test("silent system audio warning arms on start and clears on every teardown path", () => {
+  // Armed only when a system-audio strategy is active (never for mic-only).
+  assert.match(
+    source,
+    /result\.systemAudioStrategy && result\.systemAudioStrategy !== "unsupported"[\s\S]{0,160}?armMeetingSystemAudioSilenceTimer\(/
+  );
+  assert.match(source, /send\("meeting-system-audio-silent", \{ systemAudioStrategy \}\)/);
+  // Normal/forced stop and error rollback both clear the one-shot timer.
+  const rollbackStart = source.indexOf("const rollbackMeetingTranscriptionStart");
+  const stopStart = source.indexOf("const stopMeetingTranscription");
+  assert.ok(rollbackStart >= 0 && stopStart > rollbackStart);
+  const rollbackSection = source.slice(
+    rollbackStart,
+    source.indexOf("const setupDictationCallbacks")
+  );
+  assert.match(rollbackSection, /clearMeetingSystemAudioSilenceTimer\(\);/);
+  const stopSection = source.slice(
+    stopStart,
+    source.indexOf("const meetingTranscriptionLifecycle")
+  );
+  assert.match(stopSection, /clearMeetingSystemAudioSilenceTimer\(\);/);
+});
+
+test("a silent Windows capture hands the live session to renderer loopback", () => {
+  // probe/activation success cannot see this failure, so the helper's own
+  // capture_silent warning is the only trigger back to the Chromium fallback.
+  assert.match(
+    source,
+    /if \(code === "capture_silent"\) \{\s*degradeMeetingSystemAudioToLoopback\(event\);/
+  );
+  assert.match(
+    source,
+    /onChunk: \(chunk\) => \{\s*if \(!meetingSystemAudioHandover\.acceptNativeChunk\(chunk\)\) return;/
+  );
+
+  // Leaking the latch across sessions would pin the fallback off for the rest
+  // of the app's life, so it resets everywhere the heard-audio latch does.
+  assert.equal(
+    (
+      source.match(
+        /meetingSystemAudioHeard = false;\s*\n\s*meetingSystemAudioHandover\.reset\(\);/g
+      ) ?? []
+    ).length,
+    2
+  );
+});
+
+test("the system-audio watchdog is armed beside the silence timer and torn down with it", () => {
+  // Same gate as the one-shot warning: never armed for a mic-only session.
+  assert.match(
+    source,
+    /result\.systemAudioStrategy && result\.systemAudioStrategy !== "unsupported"[\s\S]{0,240}?startMeetingSystemAudioWatchdog\(meetingConnectionWin, result\.systemAudioStrategy\)/
+  );
+  // Only the macOS tap emits a chunk per period, so only it can be judged on
+  // delivery gaps; the loopback helpers may legitimately go idle.
+  assert.match(source, /watchesDelivery: systemAudioStrategy === "native"/);
+
+  // The ticker is the only timer the controller owns, and leaking one would
+  // keep judging a session that has already ended.
+  assert.match(
+    source,
+    /const stopMeetingSystemAudioWatchdog = \(\) => \{[\s\S]{0,400}?clearMeetingSystemAudioTicker\(\);[\s\S]{0,300}?meetingSystemAudioWatchdog\.stop\(\);/
+  );
+
+  // Arming runs after capture has started and attached itself, so it must clear
+  // only the ticker. Calling the full teardown here detaches the capture the
+  // start path just installed, which is how the first draft shipped a watchdog
+  // that reported stalls it could not recover from.
+  const armStart = source.indexOf("const startMeetingSystemAudioWatchdog");
+  assert.ok(armStart >= 0);
+  const armSection = source.slice(
+    armStart,
+    source.indexOf("const rollbackMeetingTranscriptionStart")
+  );
+  assert.match(armSection, /clearMeetingSystemAudioTicker\(\);/);
+  assert.doesNotMatch(armSection, /stopMeetingSystemAudioWatchdog\(\);/);
+  assert.doesNotMatch(armSection, /detachCapture\(\)/);
+
+  // Every path that clears the one-shot timer also stops the watchdog, plus the
+  // mic-only fallback, which strands the restart hook on a dead manager.
+  for (const [label, from, to] of [
+    ["rollback", "const rollbackMeetingTranscriptionStart", "const setupDictationCallbacks"],
+    ["stop", "const stopMeetingTranscription", "const meetingTranscriptionLifecycle"],
+    ["mic-only fallback", "const fallBackToMicOnly", "const startMeetingSystemAudio = async"],
+  ]) {
+    const start = source.indexOf(from);
+    const end = source.indexOf(to);
+    assert.ok(start >= 0 && end > start, `${label} section not found`);
+    assert.match(source.slice(start, end), /stopMeetingSystemAudioWatchdog\(\);/, label);
+  }
+});
+
+test("the watchdog sees every system chunk and the helper's device warning", () => {
+  // The audible check used to be skipped once the call had been heard, which is
+  // exactly the window in which the tap dies (#1990).
+  assert.match(
+    source,
+    /const audible = rms >= MEETING_MIC_SILENCE_RMS \|\| peak >= MEETING_MIC_SILENCE_PEAK;\s*meetingSystemAudioWatchdog\.recordChunk\(audible\);/
+  );
+  assert.match(
+    source,
+    /if \(code === "device_invalidated"\) \{\s*meetingSystemAudioWatchdog\.reportDeviceInvalidated\(\);/
+  );
+
+  // Recovery bounces the helper process, so the capture must be attached by the
+  // same call that started it, not by the arming path.
+  const managedStart = source.indexOf("const startManagedMeetingSystemAudio");
+  assert.ok(managedStart >= 0);
+  const managedSection = source.slice(managedStart, source.indexOf("const fallBackToMicOnly"));
+  assert.match(
+    managedSection,
+    /meetingSystemAudioWatchdog\.attachCapture\(\{\s*stop: \(\) => manager\.stop\(\),\s*start: startCapture,/
+  );
+
+  // The interruption reaches the renderer; a log-only warning would leave the
+  // user watching a recording that has stopped hearing the call.
+  assert.match(source, /send\("meeting-system-audio-interrupted", payload\)/);
+});
+
+test("meeting connects forward the credential mode", () => {
+  // The Deepgram client picks its Authorization scheme from `mode`; both meeting
+  // connectOpts are built by hand, so omitting it re-authenticates Note Recording
+  // as managed (#2140). Scoped by sample rate so an unrelated connectOpts cannot
+  // drag the assertion off target.
+  const connectOptsBlocks =
+    source.match(/const connectOpts = \{[^}]*sampleRate: MEETING_STREAM_SAMPLE_RATE,[^}]*\};/g) ??
+    [];
+  assert.equal(connectOptsBlocks.length, 2, "initial connect and reconnect each build connectOpts");
+  for (const block of connectOptsBlocks) {
+    // Anchored: an unanchored match also accepts the key commented out.
+    assert.match(block, /^\s*mode: options\.mode,$/m);
+  }
+});
+
+test("a mid-meeting renewal refused for the session reports the sign-in sentinel", () => {
+  // The 55-minute renewal and reconnects mint new tokens; a stale session used to
+  // reach the toast as the API's bare "Invalid session" (#2427).
+  const reconnectCatch = source.slice(
+    source.indexOf('debugLogger.error("Meeting stream reconnect failed"'),
+    source.indexOf("return canRestoreOld;")
+  );
+  assert.match(
+    reconnectCatch,
+    /"meeting-transcription-error",\s*isSignInRefusal\(error\) \? "signInExpired" : error\.message/
+  );
+});
+
+test("enterprise renewal cannot restore sockets after policy or configuration refusal", async () => {
+  const start = source.indexOf("const reconnectMeetingStreams =");
+  const end = source.indexOf("const assertMeetingAllowed =", start);
+  assert.ok(start >= 0 && end > start);
+  for (const code of [
+    "PROVIDER_POLICY_CONFLICT",
+    "POLICY_UNRESOLVABLE",
+    "MANAGED_CONFIG_CHANGED",
+    "ECONNRESET",
+  ]) {
+    let disconnected = 0;
+    const streaming = {
+      isConnected: true,
+      disconnect: async () => disconnected++,
+    };
+    const target = { _meetingMicStreaming: streaming, _meetingSystemStreaming: streaming };
+    const reconnect = vm.runInNewContext(
+      `(function () { ${source.slice(start, end)} return reconnectMeetingStreams; }).call(target)`,
+      {
+        target,
+        meetingReconnectPromise: null,
+        meetingLocalMode: false,
+        meetingConnectionOptions: { provider: "enterprise-realtime" },
+        meetingConnectionWin: { isDestroyed: () => false, webContents: { send() {} } },
+        meetingReconnectCount: 0,
+        MAX_MEETING_RECONNECTS: 3,
+        resolveEnterpriseMeetingOptions: async () => {
+          throw Object.assign(new Error("replacement refused"), { code });
+        },
+        debugLogger: { error() {} },
+        resetMeetingReconnectAudio() {},
+        isSignInRefusal: () => false,
+        isAudioPolicyRefusal: () => false,
+      }
+    );
+    const recoverable = code === "ECONNRESET";
+    assert.equal(await reconnect({ restoreOldOnFailure: true }), recoverable, code);
+    assert.equal(disconnected, recoverable ? 0 : 2, code);
+    assert.equal(target._meetingMicStreaming, recoverable ? streaming : null, code);
+    assert.equal(target._meetingSystemStreaming, recoverable ? streaming : null, code);
+  }
+});
+
+test("a reconnect refused under org policy ends the meeting instead of restoring old sockets", () => {
+  const reconnectCatch = source.slice(
+    source.indexOf('debugLogger.error("Meeting stream reconnect failed"'),
+    source.indexOf("return canRestoreOld;")
+  );
+  // The policy stop clears meetingConnectionOptions, so the stale-options branch
+  // right after it returns before the old sockets can be kept or a fatal error sent.
+  assert.match(
+    reconnectCatch,
+    /if \(isAudioPolicyRefusal\(error\)\) this\._stopMeetingForPolicy\(error\.code\);\s*if \(meetingConnectionOptions !== options\) \{/
+  );
+  assert.match(
+    source,
+    /this\._stopMeetingForPolicy = \(reason = "policyRestricted"\) => \{[\s\S]{0,900}?meetingConnectionOptions = null;[\s\S]{0,900}?broadcastToWindows\("meeting-transcription-error", reason\)/
+  );
+});

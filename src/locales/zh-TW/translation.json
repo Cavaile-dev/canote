@@ -64,12 +64,12 @@
     },
     "openControlPanel": "開啟控制面板",
     "hideControlPanel": "隱藏控制面板",
-    "quit": "結束 OpenWhispr",
-    "tooltip": "OpenWhispr - 語音輸入"
+    "quit": "結束 Canote",
+    "tooltip": "Canote"
   },
   "menu": {
-    "appLabel": "OpenWhispr",
-    "quit": "結束 OpenWhispr",
+    "appLabel": "Canote",
+    "quit": "結束 Canote",
     "speech": "語音",
     "settings": "設定...",
     "help": "說明",

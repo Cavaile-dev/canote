@@ -64,12 +64,12 @@
     },
     "openControlPanel": "Abrir painel de controle",
     "hideControlPanel": "Ocultar painel de controle",
-    "quit": "Sair do OpenWhispr",
-    "tooltip": "OpenWhispr - Ditado por voz"
+    "quit": "Sair do Canote",
+    "tooltip": "Canote"
   },
   "menu": {
-    "appLabel": "OpenWhispr",
-    "quit": "Sair do OpenWhispr",
+    "appLabel": "Canote",
+    "quit": "Sair do Canote",
     "speech": "Fala",
     "settings": "Configurações...",
     "help": "Ajuda",

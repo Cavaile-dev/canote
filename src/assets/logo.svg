@@ -1,7 +1,8 @@
-<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
-<rect width="1024" height="1024" rx="241" fill="#2056DF"/>
-<circle cx="512" cy="512" r="314" fill="#2056DF" stroke="white" stroke-width="74"/>
-<path d="M512 383V641" stroke="white" stroke-width="74" stroke-linecap="round"/>
-<path d="M627 457V568" stroke="white" stroke-width="74" stroke-linecap="round"/>
-<path d="M397 457V568" stroke="white" stroke-width="74" stroke-linecap="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 256 256" fill="none">
+  <title>Canote — notes made with love</title>
+  <rect width="256" height="256" rx="60" fill="#EC6396"/>
+  <rect x="59" y="42" width="138" height="172" rx="22" fill="white"/>
+  <path d="M94 34v23M162 34v23" stroke="#F5B0CC" stroke-width="10" stroke-linecap="round"/>
+  <path d="M128 139C119 131 94 116 94 101C94 82 118 78 128 94C138 78 162 82 162 101C162 116 137 131 128 139Z" fill="#EC6396"/>
+  <path d="M91 163h74M91 184h48" stroke="#F5B0CC" stroke-width="9" stroke-linecap="round"/>
 </svg>

@@ -64,12 +64,12 @@
     },
     "openControlPanel": "打开控制面板",
     "hideControlPanel": "隐藏控制面板",
-    "quit": "退出 OpenWhispr",
-    "tooltip": "OpenWhispr - 语音听写"
+    "quit": "退出 Canote",
+    "tooltip": "Canote"
   },
   "menu": {
-    "appLabel": "OpenWhispr",
-    "quit": "退出 OpenWhispr",
+    "appLabel": "Canote",
+    "quit": "退出 Canote",
     "speech": "语音",
     "settings": "设置...",
     "help": "帮助",

@@ -4670,12 +4670,12 @@
     },
     "openControlPanel": "فتح لوحة التحكم",
     "hideControlPanel": "إخفاء لوحة التحكم",
-    "quit": "إنهاء OpenWhispr",
-    "tooltip": "OpenWhispr - الإملاء الصوتي"
+    "quit": "إنهاء Canote",
+    "tooltip": "Canote"
   },
   "menu": {
-    "appLabel": "OpenWhispr",
-    "quit": "إنهاء OpenWhispr",
+    "appLabel": "Canote",
+    "quit": "إنهاء Canote",
     "speech": "النطق",
     "settings": "الإعدادات...",
     "help": "المساعدة",

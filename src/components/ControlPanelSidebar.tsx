@@ -58,7 +58,10 @@ export default function ControlPanelSidebar({
       />
 
       <div className="px-4 pb-3 text-lg font-semibold text-primary">
-        Canote ♡
+        <span className="flex items-center gap-2">
+          <img src={logoIcon} alt="" className="h-8 w-8" />
+          Canote ♡
+        </span>
         <span className="block text-xs font-normal text-muted-foreground">
           Made with love -Pipin
         </span>

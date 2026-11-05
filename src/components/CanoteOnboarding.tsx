@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { Button } from "./ui/button";
-import { Check, Download, Loader2, Mic, NotebookPen, RefreshCw } from "./icons";
+import { Check, Download, Loader2, Mic, RefreshCw } from "./icons";
+import canoteLogo from "../assets/logo.svg";
 import WindowControls from "./WindowControls";
 import InferenceConfigEditor from "./settings/InferenceConfigEditor";
 import { cn } from "./lib/utils";
@@ -220,7 +221,7 @@ export default function CanoteOnboarding({
         style={{ WebkitAppRegion: "drag" } as CSSProperties}
       >
         <span className="flex items-center gap-2 text-sm font-semibold text-primary">
-          <NotebookPen size={18} /> Canote
+          <img src={canoteLogo} alt="" className="h-7 w-7" /> Canote
         </span>
         <div style={{ WebkitAppRegion: "no-drag" } as CSSProperties}>
           <WindowControls />

@@ -1,6 +1,6 @@
 {
   "name": "canote",
-  "version": "1.11.0",
+  "version": "1.11.1",
   "description": "Canote: local lecture transcription and AI study notes",
   "main": "main.js",
   "private": true,

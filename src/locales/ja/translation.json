@@ -64,12 +64,12 @@
     },
     "openControlPanel": "コントロールパネルを開く",
     "hideControlPanel": "コントロールパネルを非表示",
-    "quit": "OpenWhispr を終了",
-    "tooltip": "OpenWhispr - 音声ディクテーション"
+    "quit": "Canote を終了",
+    "tooltip": "Canote"
   },
   "menu": {
-    "appLabel": "OpenWhispr",
-    "quit": "OpenWhispr を終了",
+    "appLabel": "Canote",
+    "quit": "Canote を終了",
     "speech": "スピーチ",
     "settings": "設定...",
     "help": "ヘルプ",
